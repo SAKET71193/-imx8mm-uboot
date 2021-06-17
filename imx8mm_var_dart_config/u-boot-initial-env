@@ -1,0 +1,45 @@
+bootcmd=run ramsize_check; mmc dev ${mmcdev}; if mmc rescan; then if test ${use_m4} = yes && run loadm4bin; then run runm4bin; fi; if run loadbootscript; then run bootscript; else if run loadimage; then run mmcboot; else run netboot; fi; fi; else booti ${loadaddr} - ${fdt_addr}; fi;
+bootdelay=1
+baudrate=115200
+ethprime=FEC
+loadaddr=0x40480000
+mfgtool_args=setenv bootargs console=${console},${baudrate} rdinit=/linuxrc clk_ignore_unused 
+kboot=booti 
+bootcmd_mfg=run mfgtool_args;if iminfo ${initrd_addr}; then if test ${tee} = yes; then bootm ${tee_addr} ${initrd_addr} ${fdt_addr}; else booti ${loadaddr} ${initrd_addr} ${fdt_addr}; fi; else echo "Run fastboot ..."; fastboot 0; fi;
+nandfit_part=yes
+initrd_addr=0x43800000
+initrd_high=0xffffffffffffffff
+emmc_dev=2
+sd_dev=1
+bootdir=/boot
+script=boot.scr
+image=Image.gz
+console=ttymxc0,115200
+img_addr=0x42000000
+fdt_addr=0x43000000
+fdt_high=0xffffffffffffffff
+boot_fdt=try
+ip_dyn=yes
+fdt_file=undefined
+mmcdev=1
+mmcblk=1
+mmcautodetect=yes
+mmcpart=1
+m4_addr=0x7e0000
+m4_bin=hello_world.bin
+use_m4=no
+loadm4bin=load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${bootdir}/${m4_bin}; cp.b ${loadaddr} ${m4_addr} ${filesize}
+runm4bin=if test ${m4_addr} = 0x7e0000; then echo Booting M4 from TCM; else echo Booting M4 from DRAM; dcache flush; fi; bootaux ${m4_addr};
+optargs=setenv bootargs ${bootargs} ${kernelargs};
+mmcargs=setenv bootargs console=${console} root=/dev/mmcblk${mmcblk}p${mmcpart} rootwait rw ${cma_size}
+ loadbootscript=load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${bootdir}/${script};
+bootscript=echo Running bootscript from mmc ...; source
+loadimage=load mmc ${mmcdev}:${mmcpart} ${img_addr} ${bootdir}/${image};unzip ${img_addr} ${loadaddr}
+findfdt=if test $fdt_file = undefined; then if test $board_name = VAR-SOM-MX8M-MINI; then if test $carrier_rev = legacy; then setenv fdt_file imx8mm-var-som-symphony-legacy.dtb; else setenv fdt_file imx8mm-var-som-symphony.dtb; fi; else if test $carrier_rev = legacy; then setenv fdt_file imx8mm-var-dart-dt8mcustomboard-legacy.dtb; else setenv fdt_file imx8mm-var-dart-dt8mcustomboard.dtb; fi; fi; fi; 
+loadfdt=run findfdt; echo fdt_file=${fdt_file}; load mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${bootdir}/${fdt_file}
+ramsize_check=if test $sdram_size -le 512; then setenv cma_size cma=320M; else setenv cma_size cma=640M@1376M; fi;
+mmcboot=echo Booting from mmc ...; run mmcargs; run optargs; if test ${boot_fdt} = yes || test ${boot_fdt} = try; then if run loadfdt; then booti ${loadaddr} - ${fdt_addr}; else echo WARN: Cannot load the DT; fi; else echo wait for boot; fi;
+netargs=setenv bootargs console=${console} root=/dev/nfs ${cma_size} ip=dhcp nfsroot=${serverip}:${nfsroot},v3,tcp
+netboot=echo Booting from net ...; if test ${ip_dyn} = yes; then setenv get_cmd dhcp; else setenv get_cmd tftp; fi; ${get_cmd} ${img_addr} ${image}; unzip ${img_addr} ${loadaddr};run netargs; run optargs; if test ${boot_fdt} = yes || test ${boot_fdt} = try; then run findfdt; echo fdt_file=${fdt_file}; if ${get_cmd} ${fdt_addr} ${fdt_file}; then booti ${loadaddr} - ${fdt_addr}; else echo WARN: Cannot load the DT; fi; else booti; fi;
+
+
